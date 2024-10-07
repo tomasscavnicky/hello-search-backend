@@ -25,7 +25,7 @@ jobs:
           supabase link --project-ref $SUPABASE_PROJECT_REF
 
       - name: Deploy Edge Functions
-        run: supabase functions deploy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: supabase functions deploy
 
       - name: Deploy Database Migrations
-        run: supabase db push --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --remote
+        run: supabase db push
