@@ -24,4 +24,4 @@ jobs:
         run: supabase functions deploy start-chat --project-ref $SUPABASE_PROJECT_REF
 
       - name: Deploy Database Migrations
-        run: supabase db push  --project-ref $SUPABASE_PROJECT_REF
+        run: supabase db push
