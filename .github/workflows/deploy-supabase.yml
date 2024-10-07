@@ -27,5 +27,5 @@ jobs:
       - name: Deploy Edge Functions
         run: supabase functions deploy start-chat --project-ref $SUPABASE_PROJECT_REF
 
-      - name: Deploy Database Migrations
-        run: supabase db push
+      # - name: Deploy Database Migrations
+      #   run: supabase db push
