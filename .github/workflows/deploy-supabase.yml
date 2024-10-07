@@ -20,6 +20,10 @@ jobs:
         with:
           version: latest
 
+      - name: Link with Supabase project
+        run: |
+          supabase link --project-ref $SUPABASE_PROJECT_REF
+
       - name: Deploy Edge Functions
         run: supabase functions deploy start-chat --project-ref $SUPABASE_PROJECT_REF
 
