@@ -4,11 +4,11 @@ import { config } from '../config';
 import { Agent } from '../models/agent';
 
 const client = new OpenAIApi(new Configuration({
-  apiKey: config.azureOpenaiApiKey,
+  apiKey: Deno.env.get('OPENAI_API_KEY'),
   azure: {
-    apiKey: config.azureOpenaiApiKey,
-    endpoint: config.azureOpenaiEndpoint,
-    deploymentName: config.azureOpenaiDeploymentName,
+    apiKey: Deno.env.get('AZURE_OPENAI_API_KEY'),
+    endpoint: Deno.env.get('AZURE_OPENAI_ENDPOINT'),
+    deploymentName: Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME'),
   },
 }));
 
