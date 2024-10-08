@@ -1,22 +1,154 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from '@supabase/supabase-js'
+import OpenAI from 'openai'
+import { interpretNewChatPrompt } from './_shared/interpret.ts'
 
-console.log("Hello from Functions!")
+const SYSTEM_USER_ID = ''  // TODO: get this from env. migration should always create this user if it does not exist
+
+
+async function createExplicitUsers(explicitUsers, message, supabase, chatId) {
+  let users = explicitUsers || []
+
+  if (users.length === 0) {
+    users = await searchImplicitUsers(message)
+  }
+
+  for (const user of users) {
+    await createUserIfNotExists(user, supabase)
+  }
+
+  return users
+}
+
+async function createImplicitUsers(message, supabase, chatId) {
+  const users = await searchImplicitUsers(message)
+
+  for (const user of users) {
+    await createUserIfNotExists(user, supabase)
+  }
+}
+
+async function searchImplicitUsers(message) {
+  // Implement Google Places API search logic here
+  // Return an array of user objects
+}
+
+async function createUserIfNotExists(user, supabase) {
+  const { data, error } = await supabase
+    .from('User')
+    .upsert({
+      name: user.name,
+      phone_number: user.phone_number,
+      type: 'human',
+      metadata: user.metadata
+    }, { onConflict: 'phone_number' })
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create/update user: ${error.message}`)
+  }
+
+  return data
+}
+
+async function addUserToChat(user, chatId, supabase) {
+  const { error } = await supabase
+    .from('Chat')
+    .update({ to: user.id })
+    .eq('id', chatId)
+
+  if (error) {
+    throw new Error(`Failed to add user to chat: ${error.message}`)
+  }
+}
+
+async function generateResponse(message, newChatInterpretation, users) {
+  // Implement logic to generate a response
+  // This might involve calling an AI service or other external APIs
+}
+
+async function storeResponse(response, supabase, chatId) {
+  const { data, error } = await supabase
+    .from('Chat')
+    .select('history')
+    .eq('id', chatId)
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to fetch chat history: ${error.message}`)
+  }
+
+  const updatedHistory = [
+    ...data.history,
+    {
+      role: 'assistant',
+      content: response,
+      type: 'message',
+      timestamp: new Date().toISOString()
+    }
+  ]
+
+  const { error: updateError } = await supabase
+    .from('Chat')
+    .update({ history: updatedHistory })
+    .eq('id', chatId)
+
+  if (updateError) {
+    throw new Error(`Failed to update chat history: ${updateError.message}`)
+  }
+}
+
+async function createChatWithInitialMessage(supabase, user_id, message) {
+  const initialHistory = [{
+    role: 'user',
+    content: message,
+    type: 'message',
+    timestamp: new Date().toISOString()
+  }]
+
+  const { data: chatData, error: chatError } = await supabase
+    .from('Chat')
+    .insert({
+      from: user_id,
+      to: SYSTEM_USER_ID,
+      type: 'human',
+      history: initialHistory
+    })
+    .select()
+    .single()
+
+  if (chatError) {
+    throw new Error(`Failed to create chat with initial message: ${chatError.message}`)
+  }
+
+  return chatData.id
+}
 
 Deno.serve(async (req) => {
   const { message } = await req.json()
+  const { user_id } = req.user
+  const newChatInterpretation = await interpretNewChatPrompt(message)
 
-  // TODO:
-  // create new chat record
-  // store the new incoming message as the first message in the chat history
-  // [conditional] check if any new users/contacts were explicitly added to the initial chat message
-    // [conditional] if no explicit users/contacts, look for implicit users by searching Google Places API
-    // [conditional] create all new users and create a record in the history of chat about adding new users -- this will help LLM decide in the future if the user wants to add new users
-  // [conditional] create system user (agent) based on the first chat message, i.e. voice agent on Vapi
-  // [conditional] create new chats with new users, i.e. initiate new phone calls via Vapi
-  // generate response stream and start storing the stream in chat history (UI is subscribed to changes so will display these changes as they come)
+  const openai = new OpenAI({
+    apiKey: Deno.env.get('OPENAI_API_KEY'),
+  })
+  const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'))
+
+  const chatId = await createChatWithInitialMessage(supabase, user_id, message)
+
+  if (newChatInterpretation.shouldCreateUsers) {
+    if (newChatInterpretation.explicitNewUsers) {
+      const users = await createExplicitUsers(newChatInterpretation.explicitNewUsers, message, supabase, chatId)
+    } else {
+      const users = await createImplicitUsers(message, supabase, chatId)
+    }
+    await intiateNewChats(newChatInterpretation, users, supabase, chatId)
+  }
+  await generateResponse(message, newChatInterpretation)
 
   return new Response(
-    JSON.stringify(data),
+    JSON.stringify({ chatId: chatId }),
     { headers: { "Content-Type": "application/json" } },
   )
 })
