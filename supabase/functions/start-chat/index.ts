@@ -64,8 +64,26 @@ async function addUserToChat(user, chatId, supabase) {
 }
 
 async function generateResponse(message, newChatInterpretation, users) {
-  // Implement logic to generate a response
-  // This might involve calling an AI service or other external APIs
+  const client = new OpenAIApi(new Configuration({
+    apiKey: config.azureOpenaiApiKey,
+    azure: {
+      apiKey: config.azureOpenaiApiKey,
+      endpoint: config.azureOpenaiEndpoint,
+      deploymentName: config.azureOpenaiDeploymentName,
+    },
+  }));
+
+  const systemPrompt = `You are an AI assistant in a group chat. The chat context is: ${newChatInterpretation.newChatPrompt}. The users in this chat are: ${users.map(u => u.name).join(', ')}.`;
+
+  const response = await client.createChatCompletion({
+    model: config.azureOpenaiModel,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: message }
+    ],
+  });
+
+  return response.data.choices[0].message?.content || "I'm sorry, I couldn't generate a response.";
 }
 
 async function storeResponse(response, supabase, chatId) {
@@ -145,7 +163,8 @@ Deno.serve(async (req) => {
     }
     await intiateNewChats(newChatInterpretation, users, supabase, chatId)
   }
-  await generateResponse(message, newChatInterpretation)
+  const response = await generateResponse(message, newChatInterpretation)
+  await storeResponse(response, supabase, chatId)
 
   return new Response(
     JSON.stringify({ chatId: chatId }),
