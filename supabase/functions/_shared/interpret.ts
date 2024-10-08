@@ -1,14 +1,9 @@
-import { Configuration, OpenAIApi } from 'openai';
+import { OpenAI } from 'openai';
 import { z } from 'zod';
 
-const client = new OpenAIApi(new Configuration({
+const client = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY'),
-  azure: {
-    apiKey: Deno.env.get('AZURE_OPENAI_API_KEY'),
-    endpoint: Deno.env.get('AZURE_OPENAI_ENDPOINT'),
-    deploymentName: Deno.env.get('AZURE_OPENAI_DEPLOYMENT_NAME'),
-  },
-}));
+});
 
 const NewChatPromptInterpretationSchema = z.object({
   shouldCreateUsers: z.boolean().describe("whether to create new users or not"),
@@ -47,11 +42,12 @@ class NewChatPromptInterpretationClass implements NewChatPromptInterpretation {
     ${Object.keys(NewChatPromptInterpretationSchema.shape).join(", ")}.
     You are really good at generating properly formatted JSON. Your output is always
     only the corresponding JSON, nothing else. Output just valid JSON in plain text.`,
-      `You are given the following agent prompt: ${agent.agent_prompt}`,
       `Interpret the agent prompt and extract the key information into a JSON format. The JSON must include the following fields:
     ${Object.keys(NewChatPromptInterpretationSchema.shape).join(", ")}.
     You are really good at generating properly formatted JSON. Your output is always
     only the corresponding JSON, nothing else. Output just valid JSON in plain text.`,
+        `Do not include any other text than the JSON. Not even JSON code tag or any 
+    JSON code block or markdown.`,
     ].join("\n\n");
   }
 }
@@ -59,8 +55,8 @@ class NewChatPromptInterpretationClass implements NewChatPromptInterpretation {
 async function interpretNewChatPrompt(prompt: string): Promise<NewChatPromptInterpretation> {
   console.info(`Interpreting chat prompt: ${prompt}`);
 
-  const response = await client.createChatCompletion({
-    model: config.azureOpenaiModel,
+  const response = await client.chat.completions.create({
+    model: Deno.env.get('AZURE_OPENAI_MODEL'),
     messages: [
       {
         role: "system",
@@ -73,10 +69,12 @@ async function interpretNewChatPrompt(prompt: string): Promise<NewChatPromptInte
     ],
   });
 
-  const interpretation = NewChatPromptInterpretationSchema.parse(JSON.parse(response.data.choices[0].message?.content || "{}"));
+  console.log(response)
+
+  const interpretation = NewChatPromptInterpretationSchema.parse(JSON.parse(response.choices[0].message?.content || "{}"));
   const newChat = new NewChatPromptInterpretationClass(interpretation);
 
-  console.info(`Successfully interpreted chat prompt: ${JSON.stringify(interpretedPrompt)}`);
+  console.info(`Successfully interpreted chat prompt: ${JSON.stringify(newChat)}`);
   return newChat;
 }
 

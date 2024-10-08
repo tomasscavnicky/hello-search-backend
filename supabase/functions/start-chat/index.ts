@@ -1,9 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from 'supabase-js'
-import OpenAI from 'openai'
+import { OpenAI } from 'openai'
 import { interpretNewChatPrompt } from '../_shared/interpret.ts'
 
-const SYSTEM_USER_ID = ''  // TODO: get this from env. migration should always create this user if it does not exist
+const SYSTEM_USER_ID = 1
 
 
 async function createExplicitUsers(explicitUsers, message, supabase, chatId) {
@@ -63,27 +63,22 @@ async function addUserToChat(user, chatId, supabase) {
   }
 }
 
-async function generateResponse(message, newChatInterpretation, users) {
-  const client = new OpenAIApi(new Configuration({
-    apiKey: config.azureOpenaiApiKey,
-    azure: {
-      apiKey: config.azureOpenaiApiKey,
-      endpoint: config.azureOpenaiEndpoint,
-      deploymentName: config.azureOpenaiDeploymentName,
-    },
-  }));
+async function generateResponse(message, newChatInterpretation) {
+  const client = new OpenAI({
+    apiKey: Deno.env.get('OPENAI_API_KEY'),
+  });
 
-  const systemPrompt = `You are an AI assistant in a group chat. The chat context is: ${newChatInterpretation.newChatPrompt}. The users in this chat are: ${users.map(u => u.name).join(', ')}.`;
+  const systemPrompt = `You are an AI assistant in a group chat. The chat context is: ${newChatInterpretation.newChatPrompt}.`;
 
-  const response = await client.createChatCompletion({
-    model: config.azureOpenaiModel,
+  const response = await client.chat.completions.create({
+    model: Deno.env.get('AZURE_OPENAI_MODEL'),
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: message }
     ],
   });
 
-  return response.data.choices[0].message?.content || "I'm sorry, I couldn't generate a response.";
+  return response.choices[0].message?.content || "I'm sorry, I couldn't generate a response.";
 }
 
 async function storeResponse(response, supabase, chatId) {
@@ -92,6 +87,7 @@ async function storeResponse(response, supabase, chatId) {
     .select('history')
     .eq('id', chatId)
     .single()
+
 
   if (error) {
     throw new Error(`Failed to fetch chat history: ${error.message}`)
@@ -113,22 +109,21 @@ async function storeResponse(response, supabase, chatId) {
     .eq('id', chatId)
 
   if (updateError) {
+    console.error(updateError)
     throw new Error(`Failed to update chat history: ${updateError.message}`)
   }
 }
 
-async function createChatWithInitialMessage(supabase, user_id, message) {
+async function createChatWithInitialMessage(supabase, message) {
   const initialHistory = [{
     role: 'user',
     content: message,
     type: 'message',
     timestamp: new Date().toISOString()
   }]
-
-  const { data: chatData, error: chatError } = await supabase
+  const { data: chatData, error: error } = await supabase
     .from('Chat')
     .insert({
-      from: user_id,
       to: SYSTEM_USER_ID,
       type: 'human',
       history: initialHistory
@@ -136,8 +131,8 @@ async function createChatWithInitialMessage(supabase, user_id, message) {
     .select()
     .single()
 
-  if (chatError) {
-    throw new Error(`Failed to create chat with initial message: ${chatError.message}`)
+  if (error) {
+    throw new Error(`Failed to create chat with initial message: ${error.message}`)
   }
 
   return chatData.id
@@ -145,15 +140,13 @@ async function createChatWithInitialMessage(supabase, user_id, message) {
 
 Deno.serve(async (req) => {
   const { message } = await req.json()
-  const { user_id } = req.user
   const newChatInterpretation = await interpretNewChatPrompt(message)
 
   const openai = new OpenAI({
     apiKey: Deno.env.get('OPENAI_API_KEY'),
   })
   const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'))
-
-  const chatId = await createChatWithInitialMessage(supabase, user_id, message)
+  const chatId = await createChatWithInitialMessage(supabase, message)
 
   if (newChatInterpretation.shouldCreateUsers) {
     if (newChatInterpretation.explicitNewUsers) {
