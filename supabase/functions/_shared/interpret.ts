@@ -1,7 +1,5 @@
 import { Configuration, OpenAIApi } from 'openai';
 import { z } from 'zod';
-import { config } from '../config';
-import { Agent } from '../models/agent';
 
 const client = new OpenAIApi(new Configuration({
   apiKey: Deno.env.get('OPENAI_API_KEY'),

@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from 'supabase-js'
 import OpenAI from 'openai'
-import { interpretNewChatPrompt } from './_shared/interpret.ts'
+import { interpretNewChatPrompt } from '../_shared/interpret.ts'
 
 const SYSTEM_USER_ID = ''  // TODO: get this from env. migration should always create this user if it does not exist
 

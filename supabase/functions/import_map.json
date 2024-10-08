@@ -1,6 +1,8 @@
 {
     "imports": {
         "lodash": "https://cdn.skypack.dev/lodash",
-        "openai": "https://deno.land/x/openai@v4.24.0/mod.ts"
+        "openai": "https://deno.land/x/openai@v4.24.0/mod.ts",
+        "supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+        "zod": "https://deno.land/x/zod@v3.21.4/mod.ts"
     }
 }
